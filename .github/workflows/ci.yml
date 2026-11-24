@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (PHP ${{ matrix.php }}, PostgreSQL)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ["8.2", "8.3"]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nguzopay_test
+          POSTGRES_USER: nguzopay
+          POSTGRES_PASSWORD: nguzopay
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nguzopay"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Overrides phpunit.xml's SQLite default: CI tests on the production database engine.
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: nguzopay_test
+      DB_USERNAME: nguzopay
+      DB_PASSWORD: nguzopay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_pgsql, sodium, intl, pcntl
+          coverage: none
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+      - name: Tests
+        run: php artisan test

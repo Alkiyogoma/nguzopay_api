@@ -1,0 +1,26 @@
+# Local services for the NguzoPay API. Usage: docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nguzopay
+      POSTGRES_USER: nguzopay
+      POSTGRES_PASSWORD: nguzopay
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nguzopay"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  # Catches outgoing email (verification, reset, invitations): http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ["1025:1025", "8025:8025"]
+
+volumes:
+  pgdata:
