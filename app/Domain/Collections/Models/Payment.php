@@ -4,7 +4,9 @@ namespace App\Domain\Collections\Models;
 
 use App\Domain\Billing\Models\ControlNumber;
 use App\Domain\Billing\Models\Customer;
+use App\Domain\Business\Models\Business;
 use App\Domain\Collections\Enums\MobileOperator;
+use App\Support\HasPublicToken;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** Money that has actually arrived. Immutable once written, apart from settlement linkage. */
 class Payment extends Model
 {
-    use HasUlids;
+    use HasPublicToken, HasUlids;
 
     protected $guarded = [];
 
@@ -81,5 +83,16 @@ class Payment extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);
+    }
+
+    public function business(): BelongsTo
+    {
+        return $this->belongsTo(Business::class)->withTrashed();
+    }
+
+    /** Public page that verifies this receipt. */
+    public function publicUrl(): string
+    {
+        return $this->publicLink('r');
     }
 }

@@ -67,6 +67,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('darsms', fn () => Limit::perMinute(150));
 
         // Provider callbacks: generous, but bounded per source IP.
+        // Merchant API: per key (falls back to IP for a missing or bad key).
+        RateLimiter::for('merchant-api', fn (Request $request) => Limit::perMinute(120)->by('key:'.substr(hash('sha256', (string) $request->bearerToken()), 0, 16).':'.$request->ip()));
+
         RateLimiter::for('webhooks', fn (Request $request) => Limit::perMinute(600)->by('ip:'.$request->ip()));
 
         // SMS costs money and can be abused to spam numbers: 3 per 10 min per number, 10/hour per IP.

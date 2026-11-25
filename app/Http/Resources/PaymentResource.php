@@ -34,6 +34,7 @@ class PaymentResource extends JsonResource
             'status' => $this->status,
             'settlement_id' => $this->settlement_id,
             'payment_intent_id' => $this->payment_intent_id,
+            'business' => $this->whenLoaded('business', fn () => $this->business ? ['id' => $this->business->id, 'name' => $this->business->displayName(), 'code' => $this->business->code] : null),
             'customer' => $this->whenLoaded('customer', fn () => $this->customer ? ['id' => $this->customer->id, 'name' => $this->customer->name] : null),
             'allocations' => $this->whenLoaded('allocations', fn () => $this->allocations->map(fn ($a) => [
                 'invoice_id' => $a->invoice_id,
@@ -44,6 +45,7 @@ class PaymentResource extends JsonResource
                 'amount' => $a->amount,
             ])),
             'paid_at' => $this->paid_at?->toIso8601String(),
+            'public_url' => $this->receipt_number ? $this->publicUrl() : null,
         ];
     }
 }

@@ -3,8 +3,10 @@
 namespace Tests\Feature\Collections;
 
 use App\Domain\Billing\Models\Customer;
+use App\Domain\Collections\Models\BillerCall;
 use App\Domain\Collections\Models\Payment;
 use App\Domain\Ledger\Services\Ledger;
+use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
 
 class NmbBillerTest extends CollectionsTestCase
@@ -83,7 +85,7 @@ class NmbBillerTest extends CollectionsTestCase
             ->assertJsonPath('body.billOwner.emailAddress', 'bursar@feza.tz')
             ->assertJsonPath('body.billStatus.Code', '103');
 
-        $this->assertMatchesRegularExpression('#^\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2} (AM|PM)$#', $this->inquiry($partial['control_number'])->json('body.billExpirationDate'));
+        $this->assertMatchesRegularExpression('#^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2} (AM|PM)$#', $this->inquiry($partial['control_number'])->json('body.billExpirationDate'));
 
         $this->inquiry($exact['control_number'])->assertJsonPath('body.paymentOption', 'EXACT')->assertJsonPath('body.minAmountToPay', '30000');
         $this->inquiry($customer['account_number'])->assertJsonPath('body.paymentOption', 'PARTIAL')
@@ -159,5 +161,58 @@ class NmbBillerTest extends CollectionsTestCase
         // NMB's token opens nothing at CRDB, which needs CRDB's signature.
         $this->postJson('/api/v1/billers/crdb', ['paymentReference' => $customer['account_number'], 'institutionID' => 1],
             ['Authorization' => 'Bearer '.self::TOKEN])->assertJsonPath('status', '201');
+    }
+
+    public function test_every_call_is_logged_with_our_answer_including_refusals(): void
+    {
+        $customer = $this->customer();
+        $invoice = $this->invoiceWithControl($customer['id'], 10_000);
+
+        $this->inquiry($invoice['control_number'])->assertJsonPath('statusCode', 600);
+        $this->notify($invoice['control_number'], '10000')->assertJsonPath('statusCode', 600);
+        $this->notify('99999999999', '5000', 'GWX-BAD', 'NMB-BAD')->assertJsonPath('statusCode', 649);
+        $this->nmb('inquiry', ['body' => ['paymentReference' => $invoice['control_number'], 'transactionId' => 'T-1']], 'wrong')->assertStatus(401);
+
+        $calls = BillerCall::orderBy('id')->get();
+        $this->assertSame(['inquiry', 'payment', 'payment', 'inquiry'], $calls->pluck('kind')->all());
+        $this->assertSame(['600', '600', '649', '649'], $calls->pluck('result_code')->all());
+        $this->assertSame([200, 200, 200, 401], $calls->pluck('http_status')->all());
+        $this->assertSame(['GWX21567289', $invoice['control_number']], [$calls[0]->transaction_id, $calls[0]->payment_reference]);
+        $this->assertSame(['GWX9876738', 'NMB123467587'], [$calls[1]->transaction_id, $calls[1]->bank_reference]);
+        $this->assertSame(Payment::sole()->receipt_number, $calls[1]->response['body']['receiptNumber']);
+        $this->assertSame('Unauthorized.', $calls[3]->result_message);
+        $this->assertTrue($calls->every(fn ($c) => $c->biller === 'nmb' && $c->ip_address === '127.0.0.1'));
+
+        // Append-only.
+        $this->expectException(\LogicException::class);
+        $calls[0]->update(['result_code' => '000']);
+    }
+
+    public function test_unknown_address_is_refused_in_nmb_format_and_logged(): void
+    {
+        config(['nguzopay.payments.nmb.allowed_ips' => ['10.30.0.5']]);
+        $customer = $this->customer();
+
+        $this->inquiry($customer['account_number'])->assertStatus(403)
+            ->assertExactJson(['body' => [], 'message' => 'Access denied.', 'statusCode' => 649]);
+        $this->assertSame(['649', 403], [BillerCall::sole()->result_code, BillerCall::sole()->http_status]);
+    }
+
+    public function test_payment_is_dated_by_nmb_effective_date(): void
+    {
+        $customer = $this->customer();
+        $this->travelTo(Carbon::parse('2026-11-25 15:00:00', 'Africa/Dar_es_Salaam'));
+
+        $first = $this->invoiceWithControl($customer['id'], 10_000);
+        $this->notify($first['control_number'], '10000')->assertJsonPath('statusCode', 600); // effectiveDate 2026-11-25 12:30 EAT
+        $this->assertSame('2026-11-25T09:30:00+00:00', Payment::sole()->paid_at->utc()->toIso8601String());
+
+        // A future or unreadable date is not trusted: the payment is dated now.
+        $second = $this->invoiceWithControl($customer['id'], 5_000);
+        $this->nmb('payment-notification', ['requestDetails' => [
+            'transactionId' => 'GWX-2', 'paymentReference' => $second['control_number'], 'amount' => '5000',
+            'bankReference' => 'NMB-2', 'payerDetails' => ['name' => 'W'], 'effectiveDate' => '2027-01-01 00:00:00',
+        ]])->assertJsonPath('statusCode', 600);
+        $this->assertSame(now()->utc()->toIso8601String(), Payment::latest('id')->first()->paid_at->utc()->toIso8601String());
     }
 }

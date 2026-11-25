@@ -4,6 +4,7 @@ namespace App\Domain\Collections\Services;
 
 use App\Domain\Collections\Models\Payment;
 use App\Domain\Collections\Models\Settlement;
+use App\Domain\Payouts\Services\PayoutService;
 use App\Domain\Platform\Services\AuditLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -12,12 +13,13 @@ use Illuminate\Support\Facades\DB;
 /**
  * T+0 sweep (D-016). At the daily cut-off, every unsettled payment received up
  * to the cut-off becomes one settlement per business, to be paid to the
- * merchant's bank the same day. Moving the money needs the payout rails (P3);
- * until then finance pays it and marks it paid.
+ * merchant the same day. Each settlement becomes a payout to the business's
+ * settlement account (D-029); finance pays it until the payout rails (P3), and
+ * the settlement follows its payout (paid / failed / covered).
  */
 class SettlementService
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AuditLogger $audit, private readonly PayoutService $payouts) {}
 
     public function cutoffFor(CarbonImmutable $date): CarbonImmutable
     {
@@ -72,6 +74,19 @@ class SettlementService
             ]);
 
             return $settlement;
-        }))->filter()->values();
+        }))->filter()->values()
+            // Outside the settlement transaction: a failed payout must never undo the settlement.
+            ->each(fn (Settlement $s) => $this->payouts->sweep($s))
+            ->tap(fn () => $this->sweepWaiting());
+    }
+
+    /** Settlements closed before the business set its settlement account are paid as soon as it has one. */
+    private function sweepWaiting(): void
+    {
+        Settlement::where('status', 'pending_payout')
+            ->whereDoesntHave('payout')
+            ->whereHas('business.settlementAccount')
+            ->orderBy('settlement_date')
+            ->each(fn (Settlement $s) => $this->payouts->sweep($s));
     }
 }

@@ -5,6 +5,7 @@ namespace App\Domain\Billing\Models;
 use App\Domain\Billing\Enums\InvoiceStatus;
 use App\Domain\Business\Models\Business;
 use App\Domain\Collections\Models\PaymentAllocation;
+use App\Support\HasPublicToken;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Invoice extends Model
 {
-    use HasUlids;
+    use HasPublicToken, HasUlids;
 
     protected $fillable = ['external_reference', 'description', 'allow_partial', 'min_amount', 'due_date'];
 
@@ -82,5 +83,11 @@ class Invoice extends Model
         }
 
         return min($balance, max(1, (int) $this->min_amount));
+    }
+
+    /** Public page for this invoice: status, balance, how to pay, download. */
+    public function publicUrl(): string
+    {
+        return $this->publicLink('i');
     }
 }

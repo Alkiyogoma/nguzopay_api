@@ -4,6 +4,7 @@ namespace Tests\Feature\Collections;
 
 use App\Domain\Billing\Models\Customer;
 use App\Domain\Billing\Services\ControlNumberService;
+use App\Domain\Collections\Models\BillerCall;
 use App\Domain\Collections\Models\Payment;
 use Illuminate\Testing\TestResponse;
 
@@ -175,6 +176,11 @@ class CrdbBillerTest extends CollectionsTestCase
         config(['nguzopay.payments.crdb.allowed_ips' => ['10.20.0.9']]);
         $customer = $this->customer();
 
-        $this->verify($customer['account_number'])->assertForbidden();
+        $this->verify($customer['account_number'])->assertForbidden()
+            ->assertExactJson(['status' => '201', 'statusDesc' => 'Access denied']);
+
+        $call = BillerCall::sole();
+        $this->assertSame(['crdb', 'inquiry', $customer['account_number'], '201', 403],
+            [$call->biller, $call->kind, $call->payment_reference, $call->result_code, $call->http_status]);
     }
 }

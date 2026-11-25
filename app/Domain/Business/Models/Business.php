@@ -13,7 +13,10 @@ use App\Domain\Business\Enums\StaffRole;
 use App\Domain\Collections\Models\Payment;
 use App\Domain\Collections\Models\PaymentIntent;
 use App\Domain\Collections\Models\Settlement;
+use App\Domain\Developers\Models\ApiKey;
 use App\Domain\Identity\Models\User;
+use App\Domain\Payouts\Models\Payout;
+use App\Domain\Payouts\Models\SettlementAccount;
 use Database\Factories\BusinessFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -117,6 +120,21 @@ class Business extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function payouts(): HasMany
+    {
+        return $this->hasMany(Payout::class);
+    }
+
+    public function settlementAccount(): HasOne
+    {
+        return $this->hasOne(SettlementAccount::class);
+    }
+
+    public function apiKeys(): HasMany
+    {
+        return $this->hasMany(ApiKey::class);
     }
 
     public function settlements(): HasMany

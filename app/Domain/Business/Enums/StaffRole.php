@@ -22,9 +22,10 @@ enum StaffRole: string
         return match ($this) {
             self::Owner, self::Admin => Permission::cases(),
             self::Finance => [Permission::BusinessView, Permission::StaffView, Permission::AuditView,
-                Permission::PaymentsView, Permission::PaymentsCollect, Permission::BillingManage],
+                Permission::PaymentsView, Permission::PaymentsCollect, Permission::BillingManage, Permission::PayoutsRequest],
             self::Support => [Permission::BusinessView, Permission::StaffView, Permission::PaymentsView, Permission::PaymentsCollect],
-            self::Developer, self::Viewer => [Permission::BusinessView, Permission::StaffView, Permission::PaymentsView],
+            self::Developer => [Permission::BusinessView, Permission::StaffView, Permission::PaymentsView, Permission::ApiKeysManage],
+            self::Viewer => [Permission::BusinessView, Permission::StaffView, Permission::PaymentsView],
         };
     }
 

@@ -16,7 +16,7 @@ class InvoicesReport extends Report
         return 'Invoices';
     }
 
-    protected function base(Business $business): Builder
+    protected function base(?Business $business): Builder
     {
         return Invoice::where('invoices.business_id', $business->id)->with('customer.group', 'controlNumber')->latest();
     }
@@ -78,7 +78,7 @@ class InvoicesReport extends Report
         ]));
     }
 
-    public function summary(Builder $filtered, Business $business): array
+    public function summary(Builder $filtered, ?Business $business): array
     {
         $live = (clone $filtered)->reorder()->where('status', '!=', 'void');
         $open = (clone $filtered)->reorder()->whereIn('status', ['open', 'partially_paid']);

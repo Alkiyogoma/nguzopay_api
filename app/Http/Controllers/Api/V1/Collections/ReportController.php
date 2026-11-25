@@ -7,6 +7,7 @@ use App\Domain\Collections\Reports\CustomersReport;
 use App\Domain\Collections\Reports\GroupsReport;
 use App\Domain\Collections\Reports\InvoicesReport;
 use App\Domain\Collections\Reports\PaymentsReport;
+use App\Domain\Collections\Reports\PayoutsReport;
 use App\Domain\Collections\Reports\Report;
 use App\Domain\Collections\Reports\RequestsReport;
 use App\Domain\Collections\Reports\SettlementsReport;
@@ -30,6 +31,7 @@ class ReportController extends Controller
         'payments' => PaymentsReport::class,
         'requests' => RequestsReport::class,
         'settlements' => SettlementsReport::class,
+        'payouts' => PayoutsReport::class,
     ];
 
     public static function make(string $key): Report
@@ -42,7 +44,13 @@ class ReportController extends Controller
     public function export(Request $request, Business $business, string $report, AuditLogger $audit): Response
     {
         $this->authorize('viewPayments', $business);
-        $definition = self::make($report);
+
+        return $this->render($request, self::make($report), $report, $business, $audit);
+    }
+
+    /** Print JSON or Excel for a report: one business's, or every business's when $business is null. */
+    protected function render(Request $request, Report $definition, string $report, ?Business $business, AuditLogger $audit): Response
+    {
         $format = $request->validate(['format' => ['nullable', 'in:xlsx,json']])['format'] ?? 'xlsx';
         $filters = $definition->filters($request);
 
@@ -52,12 +60,12 @@ class ReportController extends Controller
         $columns = $definition->columns();
         $rows = (clone $query)->limit(Report::EXPORT_LIMIT)->get()->map(fn ($m) => $definition->row($m));
 
-        $audit->record('report.exported', $business, ['report' => $report, 'format' => $format, 'rows' => $rows->count()]);
+        $audit->record($business ? 'report.exported' : 'admin.report.exported', $business, ['report' => $report, 'format' => $format, 'rows' => $rows->count(), 'filters' => $filters]);
 
         $meta = [
             'title' => $definition->title(),
-            'business' => $business->displayName(),
-            'merchant_code' => $business->code,
+            'business' => $business?->displayName() ?? 'NguzoPay back-office',
+            'merchant_code' => $business?->code,
             'generated_at' => now(config('nguzopay.settlement.timezone'))->format('j M Y, H:i'),
             'filters' => $definition->filterLabels($filters),
             'total' => $total,
@@ -75,7 +83,7 @@ class ReportController extends Controller
         return $this->xlsx($meta, $summary, $columns, $rows->all());
     }
 
-    private function xlsx(array $meta, array $summary, array $columns, array $rows): Response
+    protected function xlsx(array $meta, array $summary, array $columns, array $rows): Response
     {
         $keys = array_keys($columns);
         $money = array_keys(array_filter(array_values($columns), fn ($c) => in_array($c[1], ['money', 'number'], true)));
@@ -115,7 +123,7 @@ class ReportController extends Controller
         ])->deleteFileAfterSend();
     }
 
-    private function limit(): string
+    protected function limit(): string
     {
         return number_format(Report::EXPORT_LIMIT);
     }

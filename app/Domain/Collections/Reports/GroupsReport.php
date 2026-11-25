@@ -21,7 +21,7 @@ class GroupsReport extends Report
         return 'Groups';
     }
 
-    protected function base(Business $business): Builder
+    protected function base(?Business $business): Builder
     {
         $live = fn ($q) => $this->dated($q)->where('invoices.status', '!=', 'void');
         $open = fn ($q) => $this->dated($q)->whereIn('invoices.status', ['open', 'partially_paid']);
@@ -39,7 +39,7 @@ class GroupsReport extends Report
     }
 
     /** The date range filters the invoices inside each total, not the groups. */
-    public function query(Business $business, array $f): Builder
+    public function query(?Business $business, array $f): Builder
     {
         $this->range = array_intersect_key($f, array_flip(['from', 'to']));
         $query = $this->base($business);
@@ -73,7 +73,7 @@ class GroupsReport extends Report
         }
     }
 
-    public function summary(Builder $filtered, Business $business): array
+    public function summary(Builder $filtered, ?Business $business): array
     {
         $groups = (clone $filtered)->get();
 

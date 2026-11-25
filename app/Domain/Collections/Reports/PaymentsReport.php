@@ -10,10 +10,10 @@ use Illuminate\Validation\Rule;
 
 class PaymentsReport extends Report
 {
-    private const PROVIDERS = ['mock' => 'Test network', 'snippe' => 'Snippe', 'azampay' => 'Azampay', 'crdb' => 'CRDB Bank', 'nmb' => 'NMB Bank', 'manual' => 'Recorded by hand'];
+    private const PROVIDERS = ['mock' => 'Test network', 'snippe' => 'Snippe', 'azampay' => 'Azampay', 'selcom' => 'Selcom', 'crdb' => 'CRDB Bank', 'nmb' => 'NMB Bank', 'manual' => 'Recorded by hand'];
 
     private const METHOD_PROVIDERS = [
-        'mobile_money' => ['mock', 'snippe', 'azampay'],
+        'mobile_money' => ['mock', 'snippe', 'azampay', 'selcom'],
         'bank' => ['crdb', 'nmb'],
         'manual' => ['manual'],
     ];
@@ -23,7 +23,7 @@ class PaymentsReport extends Report
         return 'Payments';
     }
 
-    protected function base(Business $business): Builder
+    protected function base(?Business $business): Builder
     {
         return Payment::where('payments.business_id', $business->id)->with('customer.group')->latest('paid_at');
     }
@@ -77,7 +77,7 @@ class PaymentsReport extends Report
         ]));
     }
 
-    public function summary(Builder $filtered, Business $business): array
+    public function summary(Builder $filtered, ?Business $business): array
     {
         // Voided entries are listed but never counted.
         $q = fn () => (clone $filtered)->reorder()->where('payments.status', 'succeeded');

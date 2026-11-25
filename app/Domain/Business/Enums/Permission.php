@@ -14,4 +14,6 @@ enum Permission: string
     case PaymentsView = 'payments.view';       // customers, invoices, payments, settlements
     case PaymentsCollect = 'payments.collect'; // add customers and invoices, request payments
     case BillingManage = 'billing.manage';     // void invoices, apply credit
+    case PayoutsRequest = 'payouts.request';   // withdraw the available balance
+    case ApiKeysManage = 'api_keys.manage';    // create and revoke API keys
 }

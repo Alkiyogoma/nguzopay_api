@@ -57,6 +57,16 @@ class BusinessPolicy
         return $this->has($user, $business, Permission::BillingManage);
     }
 
+    public function requestPayouts(User $user, Business $business): bool
+    {
+        return $this->has($user, $business, Permission::PayoutsRequest);
+    }
+
+    public function manageApiKeys(User $user, Business $business): bool
+    {
+        return $this->has($user, $business, Permission::ApiKeysManage);
+    }
+
     private function has(User $user, Business $business, Permission $permission): bool
     {
         return (bool) $business->roleOf($user)?->can($permission);

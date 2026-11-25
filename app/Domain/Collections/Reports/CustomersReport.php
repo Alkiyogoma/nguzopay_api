@@ -18,7 +18,7 @@ class CustomersReport extends Report
         return 'Customers';
     }
 
-    protected function base(Business $business): Builder
+    protected function base(?Business $business): Builder
     {
         return Customer::where('customers.business_id', $business->id)
             ->with('accountNumber', 'group')
@@ -66,7 +66,7 @@ class CustomersReport extends Report
         ]));
     }
 
-    public function summary(Builder $filtered, Business $business): array
+    public function summary(Builder $filtered, ?Business $business): array
     {
         $ids = (clone $filtered)->reorder()->select('customers.id');
         $owed = (int) Invoice::whereIn('customer_id', $ids)->whereIn('status', self::OPEN)->selectRaw('coalesce(sum(amount_due - amount_paid), 0) as v')->value('v');

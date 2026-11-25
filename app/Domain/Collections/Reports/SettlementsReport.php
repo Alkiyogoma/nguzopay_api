@@ -10,14 +10,14 @@ use Illuminate\Validation\Rule;
 
 class SettlementsReport extends Report
 {
-    private const STATUS = ['pending_payout' => 'To be paid out', 'paid' => 'Paid', 'failed' => 'Failed'];
+    private const STATUS = ['pending_payout' => 'To be paid out', 'paid' => 'Paid', 'failed' => 'Failed', 'covered' => 'Already withdrawn'];
 
     public function title(): string
     {
         return 'Settlements';
     }
 
-    protected function base(Business $business): Builder
+    protected function base(?Business $business): Builder
     {
         return Settlement::where('business_id', $business->id)->latest('settlement_date');
     }
@@ -52,7 +52,7 @@ class SettlementsReport extends Report
         return isset($f['status']) ? ['Status: '.self::STATUS[$f['status']]] : [];
     }
 
-    public function summary(Builder $filtered, Business $business): array
+    public function summary(Builder $filtered, ?Business $business): array
     {
         $q = fn () => (clone $filtered)->reorder();
 

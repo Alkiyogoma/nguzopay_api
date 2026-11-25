@@ -21,7 +21,7 @@ abstract class Report
     abstract public function title(): string;
 
     /** Query for this business, before filters. */
-    abstract protected function base(Business $business): Builder;
+    abstract protected function base(?Business $business): Builder;
 
     /** Column the date range filters on. */
     abstract protected function dateColumn(): string;
@@ -30,7 +30,7 @@ abstract class Report
     abstract protected function filter(Builder $query, array $f): void;
 
     /** @return list<array{key: string, label: string, value: int|float, format: string}> */
-    abstract public function summary(Builder $filtered, Business $business): array;
+    abstract public function summary(Builder $filtered, ?Business $business): array;
 
     /** @return array<string, array{0: string, 1: string}> key => [label, format] */
     abstract public function columns(): array;
@@ -60,7 +60,7 @@ abstract class Report
         ]);
     }
 
-    public function query(Business $business, array $f): Builder
+    public function query(?Business $business, array $f): Builder
     {
         $query = $this->base($business);
         $tz = config('nguzopay.settlement.timezone');

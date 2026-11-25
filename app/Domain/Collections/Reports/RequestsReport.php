@@ -17,7 +17,7 @@ class RequestsReport extends Report
         return 'Payment requests';
     }
 
-    protected function base(Business $business): Builder
+    protected function base(?Business $business): Builder
     {
         return PaymentIntent::where('payment_intents.business_id', $business->id)->with('customer', 'invoice')->latest();
     }
@@ -58,7 +58,7 @@ class RequestsReport extends Report
         return isset($f['status']) ? ['Status: '.(self::STATUS[$f['status']] ?? 'Waiting')] : [];
     }
 
-    public function summary(Builder $filtered, Business $business): array
+    public function summary(Builder $filtered, ?Business $business): array
     {
         $q = fn () => (clone $filtered)->reorder();
         $finished = $q()->whereIn('status', ['succeeded', 'failed', 'expired'])->count();

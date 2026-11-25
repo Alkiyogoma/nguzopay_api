@@ -11,6 +11,7 @@ class ProviderRegistry
         'mock' => MockProvider::class,
         'snippe' => SnippeProvider::class,
         'azampay' => AzampayProvider::class,
+        'selcom' => SelcomProvider::class,
     ];
 
     public function __construct(private readonly Container $app) {}

@@ -93,6 +93,26 @@ return [
         ],
 
         /*
+        | Selcom Checkout API: create order, then USSD wallet push. Requests are
+        | HMAC-signed with the API secret. Selcom's webhook is confirmed through
+        | order-status before anything is booked (its signature is undocumented).
+        */
+        'selcom' => [
+            'base_url' => env('SELCOM_BASE_URL', 'https://apigw.selcommobile.com'),
+            'vendor' => env('SELCOM_VENDOR'),         // till / vendor id, e.g. TILL6…
+            'api_key' => env('SELCOM_API_KEY'),
+            'api_secret' => env('SELCOM_API_SECRET'),
+            // Signs the per-order webhook URL token; falls back to APP_KEY.
+            'webhook_secret' => env('SELCOM_WEBHOOK_SECRET'),
+            // Selcom requires a buyer email; used when neither the customer nor the business has one.
+            'fallback_email' => env('SELCOM_FALLBACK_EMAIL'),
+            'expiry_minutes' => (int) env('SELCOM_EXPIRY_MINUTES', 60),
+            'timeout' => (int) env('SELCOM_TIMEOUT', 20),
+            // Selcom's callback does not report the fee: estimate it until statements arrive (P4).
+            'fee_bps' => (int) env('SELCOM_FEE_BPS', 0),
+        ],
+
+        /*
         | CRDB "standard bills" biller: CRDB calls us over the VPN to verify a
         | control number and to post the payment. Requests are signed by CRDB
         | (SHA256withRSA); CRDB shares only its public key (.pem).
@@ -138,6 +158,12 @@ return [
     'pricing' => [
         'fee_bps' => (int) env('NGUZOPAY_FEE_BPS', 0),
         'fee_fixed' => (int) env('NGUZOPAY_FEE_FIXED', 0),
+    ],
+
+    // Withdrawals (D-027): paid by NGUZO finance until the payout rails (P3).
+    'payouts' => [
+        'min_amount' => (int) env('PAYOUT_MIN_AMOUNT', 1000),
+        'fee_fixed' => (int) env('PAYOUT_FEE_FIXED', 0),
     ],
 
     // T+0 sweep (D-016): payments up to the daily cut-off settle the same day.

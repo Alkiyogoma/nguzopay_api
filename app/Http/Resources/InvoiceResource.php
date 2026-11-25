@@ -46,6 +46,7 @@ class InvoiceResource extends JsonResource
                 'installment' => $a->installment?->sequence,
                 'created_at' => $a->created_at?->toIso8601String(),
             ])),
+            'public_url' => $this->publicUrl(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

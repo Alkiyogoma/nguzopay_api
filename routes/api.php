@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin;
+use App\Http\Controllers\Api\V1\ApiKeyController;
 use App\Http\Controllers\Api\V1\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Auth\OtpAuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordAuthController;
@@ -11,8 +12,10 @@ use App\Http\Controllers\Api\V1\BusinessAuditController;
 use App\Http\Controllers\Api\V1\BusinessController;
 use App\Http\Controllers\Api\V1\Collections;
 use App\Http\Controllers\Api\V1\KycController;
+use App\Http\Controllers\Api\V1\Merchant\MerchantApiController;
 use App\Http\Controllers\Api\V1\MetaController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\PublicDocumentController;
 use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +26,23 @@ use Illuminate\Support\Facades\Route;
 */
 Route::prefix('v1')->name('v1.')->group(function () {
     Route::get('meta', MetaController::class)->name('meta');
+
+    // ── Public documents: what a printed invoice's or receipt's QR code opens (no sign-in) ──
+    Route::prefix('public')->name('public.')->middleware('throttle:60,1')->group(function () {
+        Route::get('invoices/{token}', [PublicDocumentController::class, 'invoice'])->where('token', '[A-Za-z0-9]{32,40}')->name('invoices.show');
+        Route::get('receipts/{token}', [PublicDocumentController::class, 'receipt'])->where('token', '[A-Za-z0-9]{32,40}')->name('receipts.show');
+    });
+
+    // ── Merchant API (D-028): "Authorization: Bearer np_sk_…", scoped per route ──
+    Route::prefix('merchant')->name('merchant.')->middleware('throttle:merchant-api')->controller(MerchantApiController::class)->group(function () {
+        Route::get('balance', 'balance')->middleware('api.key:balance:read')->name('balance');
+        Route::get('payments', 'payments')->middleware('api.key:payments:read')->name('payments.index');
+        Route::get('payments/{id}', 'payment')->middleware('api.key:payments:read')->name('payments.show');
+        Route::post('payment-requests', 'requestPayment')->middleware('api.key:payments:write')->name('payment-requests.store');
+        Route::get('payment-requests/{id}', 'paymentRequest')->middleware('api.key:payments:read')->name('payment-requests.show');
+        Route::get('customers', 'customers')->middleware('api.key:customers:read')->name('customers.index');
+        Route::post('customers', 'createCustomer')->middleware('api.key:customers:write')->name('customers.store');
+    });
 
     // ── Authentication ───────────────────────────────────────────────
     Route::prefix('auth')->name('auth.')->group(function () {
@@ -58,18 +78,18 @@ Route::prefix('v1')->name('v1.')->group(function () {
 
     // Provider callbacks (signature-verified, no user session).
     Route::post('webhooks/{provider}', WebhookController::class)
-        ->whereIn('provider', ['mock', 'snippe', 'azampay'])->middleware('throttle:webhooks')->name('webhooks');
+        ->whereIn('provider', ['mock', 'snippe', 'azampay', 'selcom'])->middleware('throttle:webhooks')->name('webhooks');
 
     // Bank billers (CRDB standard bills). One URL serves verification and payment;
     // /verify and /payment are aliases for banks that want two URLs.
-    Route::prefix('billers/crdb')->name('billers.crdb')->middleware(['biller.source:crdb', 'throttle:webhooks'])->group(function () {
+    Route::prefix('billers/crdb')->name('billers.crdb')->middleware(['biller.log:crdb', 'biller.source:crdb', 'throttle:webhooks'])->group(function () {
         Route::post('/', [BillerController::class, 'crdb']);
         Route::post('verify', [BillerController::class, 'crdb'])->name('.verify');
         Route::post('payment', [BillerController::class, 'crdb'])->name('.payment');
     });
 
     // Bank billers (NMB Biller Standard Integration API): its own credentials and format.
-    Route::prefix('billers/nmb')->name('billers.nmb')->middleware(['biller.source:nmb', 'nmb.token', 'throttle:webhooks'])->group(function () {
+    Route::prefix('billers/nmb')->name('billers.nmb')->middleware(['biller.log:nmb', 'biller.source:nmb', 'nmb.token', 'throttle:webhooks'])->group(function () {
         Route::post('/', [BillerController::class, 'nmb']);
         Route::post('inquiry', [BillerController::class, 'nmb'])->name('.inquiry');
         Route::post('payment-notification', [BillerController::class, 'nmb'])->name('.payment');
@@ -154,6 +174,26 @@ Route::prefix('v1')->name('v1.')->group(function () {
             Route::get('settlements', [Collections\PaymentController::class, 'settlements'])->name('settlements.index');
             Route::get('balance', [Collections\PaymentController::class, 'balance'])->name('balance');
             Route::get('summary', [Collections\PaymentController::class, 'summary'])->name('summary');
+            Route::get('overview', Collections\OverviewController::class)->name('overview');
+
+            // Withdrawals (D-027): requesting moves money, so two-step verification is required.
+            Route::get('payouts', [Collections\PayoutController::class, 'index'])->name('payouts.index');
+            Route::get('payouts/balance', [Collections\PayoutController::class, 'balance'])->name('payouts.balance');
+            Route::get('payouts/settlement-account', [Collections\PayoutController::class, 'settlementAccount'])->name('payouts.settlement-account');
+            Route::put('payouts/settlement-account', [Collections\PayoutController::class, 'updateSettlementAccount'])->middleware('two-factor')->name('payouts.settlement-account.update');
+            Route::get('payouts/{payout}', [Collections\PayoutController::class, 'show'])->name('payouts.show');
+            Route::middleware('two-factor')->group(function () {
+                Route::post('payouts', [Collections\PayoutController::class, 'store'])->middleware('throttle:10,1')->name('payouts.store');
+                Route::post('payouts/{payout}/cancel', [Collections\PayoutController::class, 'cancel'])->name('payouts.cancel');
+            });
+
+            // API keys (D-028).
+            Route::get('api-keys', [ApiKeyController::class, 'index'])->name('api-keys.index');
+            Route::middleware('two-factor')->group(function () {
+                Route::post('api-keys', [ApiKeyController::class, 'store'])->middleware('throttle:10,1')->name('api-keys.store');
+                Route::post('api-keys/revoke-all', [ApiKeyController::class, 'revokeAll'])->name('api-keys.revoke-all');
+                Route::delete('api-keys/{apiKey}', [ApiKeyController::class, 'destroy'])->name('api-keys.destroy');
+            });
             Route::get('reports/{report}/export', [Collections\ReportController::class, 'export'])
                 ->whereIn('report', array_keys(Collections\ReportController::REPORTS))->middleware('throttle:20,1')->name('reports.export');
         });
@@ -161,12 +201,39 @@ Route::prefix('v1')->name('v1.')->group(function () {
         // ── NGUZO back-office ────────────────────────────────────────
         Route::prefix('admin')->name('admin.')->middleware('platform.admin')->group(function () {
             Route::get('dashboard', Admin\DashboardController::class)->name('dashboard');
+            Route::get('analytics', Admin\AnalyticsController::class)->name('analytics');
+            Route::get('overview', [Admin\AnalyticsController::class, 'overview'])->name('overview');
             Route::get('businesses', [Admin\BusinessReviewController::class, 'index'])->name('businesses.index');
+            Route::get('merchants', [Admin\BusinessManagementController::class, 'index'])->name('merchants.index');
+
+            // Platform-wide transactions, with the same Print/Export as merchants.
+            Route::controller(Admin\TransactionController::class)->group(function () {
+                Route::get('payments', 'payments')->name('payments');
+                Route::get('payment-intents', 'requests')->name('payment-intents');
+                Route::get('settlements', 'settlements')->name('settlements');
+                Route::get('bank-calls', 'bankCalls')->name('bank-calls');
+                Route::get('payouts', 'payouts')->name('payouts');
+                Route::get('reports/{report}/export', 'exportAdmin')->middleware('throttle:20,1')->name('reports.export');
+            });
+
+            Route::get('payouts/{payout}', [Admin\PayoutController::class, 'show'])->name('payouts.show');
+            Route::middleware('two-factor')->group(function () {
+                Route::post('payouts/{payout}/processing', [Admin\PayoutController::class, 'processing'])->name('payouts.processing');
+                Route::post('payouts/{payout}/complete', [Admin\PayoutController::class, 'complete'])->name('payouts.complete');
+                Route::post('payouts/{payout}/fail', [Admin\PayoutController::class, 'fail'])->name('payouts.fail');
+            });
+
+            Route::get('staff', [Admin\StaffController::class, 'index'])->name('staff.index');
+            Route::middleware('two-factor')->group(function () {
+                Route::post('staff', [Admin\StaffController::class, 'store'])->name('staff.store');
+                Route::delete('staff/{user}', [Admin\StaffController::class, 'destroy'])->name('staff.destroy');
+            });
 
             Route::prefix('businesses/{business}')->name('businesses.')->scopeBindings()
                 ->controller(Admin\BusinessReviewController::class)->group(function () {
                     Route::get('/', 'show')->name('show');
                     Route::get('documents/{document}', 'downloadDocument')->name('documents.download');
+                    Route::get('performance', [Admin\BusinessManagementController::class, 'performance'])->name('performance');
 
                     // Decisions need two-step verification (plan §7).
                     Route::middleware('two-factor')->group(function () {
@@ -176,6 +243,7 @@ Route::prefix('v1')->name('v1.')->group(function () {
                         Route::post('reinstate', 'reinstate')->name('reinstate');
                         Route::patch('documents/{document}', 'reviewDocument')->name('documents.review');
                         Route::patch('sender-ids/{senderId}', 'senderIdStatus')->name('sender-ids.status');
+                        Route::put('pricing', [Admin\BusinessManagementController::class, 'updatePricing'])->name('pricing');
                     });
                 });
 

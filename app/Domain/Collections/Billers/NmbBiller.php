@@ -4,11 +4,14 @@ namespace App\Domain\Collections\Billers;
 
 use App\Domain\Billing\Enums\InvoiceStatus;
 use App\Domain\Billing\Models\ControlNumber;
+use App\Domain\Billing\Models\Invoice;
 use App\Domain\Collections\Models\InboundEvent;
 use App\Domain\Collections\Models\Payment;
 use App\Domain\Collections\Services\PaymentRecorder;
 use App\Domain\Identity\Support\PhoneNumber;
+use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -76,7 +79,8 @@ class NmbBiller
                 'mobileNumber' => (string) $customer->phone,
                 'emailAddress' => (string) $customer->email,
             ],
-            'billExpirationDate' => $expiry->format('n/j/Y g:i:s A'), // NMB sample: 10/16/2030 10:56:25 AM
+            // Zero-padded, as sadaka sends it to NMB in production: 01/05/2027 09:03:00 AM.
+            'billExpirationDate' => $expiry->format('m/d/Y h:i:s A'),
             'billStatus' => ['Code' => '103', 'Description' => 'active'],
         ]);
     }
@@ -104,8 +108,9 @@ class NmbBiller
 
         try {
             $payment = DB::transaction(function () use ($control, $d, $transactionId, $bankReference, $amount, $data) {
-                $invoice = $control->invoice;
-                if ($invoice && ! $invoice->allow_partial && $invoice->status === InvoiceStatus::Paid) {
+                // Read under the lock, so two notifications for one EXACT bill cannot both pass.
+                $invoice = $control->invoice ? Invoice::whereKey($control->invoice->id)->lockForUpdate()->first() : null;
+                if ($invoice && ! $invoice->allow_partial && ($invoice->status === InvoiceStatus::Paid || $invoice->balance() <= 0)) {
                     return null;
                 }
 
@@ -117,6 +122,7 @@ class NmbBiller
                     'payer_phone' => $this->phone($d['payerDetails']['mobileNumber'] ?? null),
                     'payer_name' => mb_substr((string) ($d['payerDetails']['name'] ?? ''), 0, 190) ?: null,
                     'amount' => $amount,
+                    'paid_at' => $this->effectiveDate($d['effectiveDate'] ?? null),
                     'details' => array_filter([
                         'bank' => 'NMB',
                         'bank_reference' => $bankReference,
@@ -217,6 +223,22 @@ class NmbBiller
     private function failure(string $message): array
     {
         return ['body' => (object) [], 'message' => $message, 'statusCode' => self::FAILURE];
+    }
+
+    /**
+     * NMB's value date for the payment, so our records match NMB's statement.
+     * Anything unparseable, in the future or older than 30 days falls back to now.
+     * Back-dating is safe for settlements: unsettled payments roll into the next sweep.
+     */
+    private function effectiveDate(mixed $value): CarbonInterface
+    {
+        try {
+            $date = is_string($value) && trim($value) !== '' ? Carbon::parse($value, 'Africa/Dar_es_Salaam') : null;
+        } catch (Throwable) {
+            $date = null;
+        }
+
+        return $date && $date->lte(now()->addMinutes(5)) && $date->gte(now()->subDays(30)) ? $date->utc() : now();
     }
 
     private function phone(mixed $value): ?string

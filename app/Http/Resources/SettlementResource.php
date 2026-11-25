@@ -22,6 +22,7 @@ class SettlementResource extends JsonResource
             'net_amount' => $this->net_amount,
             'status' => $this->status,
             'payout_reference' => $this->payout_reference,
+            'business' => $this->whenLoaded('business', fn () => $this->business ? ['id' => $this->business->id, 'name' => $this->business->displayName(), 'code' => $this->business->code] : null),
             'paid_at' => $this->paid_at?->toIso8601String(),
         ];
     }

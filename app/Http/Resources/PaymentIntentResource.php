@@ -23,6 +23,7 @@ class PaymentIntentResource extends JsonResource
             'status' => $this->status->value,
             'failure_reason' => $this->failure_reason,
             'invoice_id' => $this->invoice_id,
+            'business' => $this->whenLoaded('business', fn () => $this->business ? ['id' => $this->business->id, 'name' => $this->business->displayName(), 'code' => $this->business->code] : null),
             'customer' => $this->whenLoaded('customer', fn () => ['id' => $this->customer->id, 'name' => $this->customer->name]),
             'invoice' => $this->whenLoaded('invoice', fn () => $this->invoice ? ['id' => $this->invoice->id, 'number' => $this->invoice->number] : null),
             'attempts' => $this->whenLoaded('attempts', fn () => $this->attempts->map(fn ($a) => [
