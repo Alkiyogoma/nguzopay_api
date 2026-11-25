@@ -66,6 +66,9 @@ class AppServiceProvider extends ServiceProvider
         // Outgoing SMS jobs stay below DarSMS's 180 requests/min per API key.
         RateLimiter::for('darsms', fn () => Limit::perMinute(150));
 
+        // Provider callbacks: generous, but bounded per source IP.
+        RateLimiter::for('webhooks', fn (Request $request) => Limit::perMinute(600)->by('ip:'.$request->ip()));
+
         // SMS costs money and can be abused to spam numbers: 3 per 10 min per number, 10/hour per IP.
         RateLimiter::for('otp', fn (Request $request) => [
             Limit::perMinutes(10, 3)->by('phone:'.preg_replace('/\D/', '', (string) $request->input('phone'))),

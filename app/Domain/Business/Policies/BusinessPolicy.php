@@ -42,6 +42,21 @@ class BusinessPolicy
         return $this->has($user, $business, Permission::AuditView);
     }
 
+    public function viewPayments(User $user, Business $business): bool
+    {
+        return $this->has($user, $business, Permission::PaymentsView);
+    }
+
+    public function collect(User $user, Business $business): bool
+    {
+        return $this->has($user, $business, Permission::PaymentsCollect);
+    }
+
+    public function manageBilling(User $user, Business $business): bool
+    {
+        return $this->has($user, $business, Permission::BillingManage);
+    }
+
     private function has(User $user, Business $business, Permission $permission): bool
     {
         return (bool) $business->roleOf($user)?->can($permission);

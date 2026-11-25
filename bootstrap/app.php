@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureBillerSource;
+use App\Http\Middleware\EnsureNmbToken;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureTwoFactorEnabled;
 use Illuminate\Foundation\Application;
@@ -18,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'platform.admin' => EnsurePlatformAdmin::class,
             'two-factor' => EnsureTwoFactorEnabled::class,
+            'biller.source' => EnsureBillerSource::class,
+            'nmb.token' => EnsureNmbToken::class,
         ]);
         // The Next.js portal proxies API calls and forwards the client IP, so
         // rate limits and audit logs see the real user, not the proxy.

@@ -11,7 +11,7 @@ php artisan db:seed            # demo owner + two admins (see database/seeders)
 php artisan serve --port=8000
 ```
 
-SMS and emails are sent from the queue, so run a worker next to the server: `php artisan queue:work --queue=sms,default` (or `composer dev`, which starts server, worker and logs together). SMS codes go to `storage/logs/laravel.log` while `SMS_DRIVER=log`.
+SMS and emails are sent from the queue, so run a worker next to the server: `php artisan queue:work --queue=payments,sms,default` (or `composer dev`, which starts server, worker and logs together). SMS codes go to `storage/logs/laravel.log` while `SMS_DRIVER=log`.
 
 The seeded owner and both admins have SMS two-step on (required for their roles). If your local database predates that, run `php artisan migrate:fresh --seed`; this wipes local data.
 

@@ -2,11 +2,17 @@
 
 namespace App\Domain\Business\Models;
 
+use App\Domain\Billing\Models\Customer;
+use App\Domain\Billing\Models\CustomerGroup;
+use App\Domain\Billing\Models\Invoice;
 use App\Domain\Business\Enums\BusinessStatus;
 use App\Domain\Business\Enums\BusinessType;
 use App\Domain\Business\Enums\MemberStatus;
 use App\Domain\Business\Enums\RegistrationAuthority;
 use App\Domain\Business\Enums\StaffRole;
+use App\Domain\Collections\Models\Payment;
+use App\Domain\Collections\Models\PaymentIntent;
+use App\Domain\Collections\Models\Settlement;
 use App\Domain\Identity\Models\User;
 use Database\Factories\BusinessFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -80,6 +86,48 @@ class Business extends Model
     public function senderIds(): HasMany
     {
         return $this->hasMany(SmsSenderId::class);
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function customerGroups(): HasMany
+    {
+        return $this->hasMany(CustomerGroup::class);
+    }
+
+    /** Alias for route-model binding of {group}. */
+    public function groups(): HasMany
+    {
+        return $this->customerGroups();
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function paymentIntents(): HasMany
+    {
+        return $this->hasMany(PaymentIntent::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function settlements(): HasMany
+    {
+        return $this->hasMany(Settlement::class);
+    }
+
+    /** Collections are live only for verified businesses, unless the environment is a sandbox. */
+    public function canCollect(): bool
+    {
+        return $this->status === BusinessStatus::Active || ! config('nguzopay.payments.require_active_business');
     }
 
     public function recommendedBy(): BelongsTo

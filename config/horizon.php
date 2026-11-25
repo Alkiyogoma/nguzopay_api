@@ -200,7 +200,7 @@ return [
         'supervisor-1' => [
             'connection' => 'redis',
             // "sms" first: OTP codes are time-sensitive.
-            'queue' => ['sms', 'default'],
+            'queue' => ['payments', 'sms', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,
